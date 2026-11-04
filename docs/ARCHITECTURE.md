@@ -23,6 +23,59 @@ publication is atomic; replacement requires explicit authorization through the
 application flag. No source workbook is needed after a successful import to
 retrieve its retained evidence.
 
+## Workbook admission budgets
+
+`ingestion.resources` defines fixed application limits, rather than user settings:
+
+| Resource | Maximum |
+| --- | ---: |
+| Compressed input bytes | 16 MiB (16,777,216 bytes) |
+| ZIP members | 128 |
+| Aggregate expanded ZIP bytes | 64 MiB (67,108,864 bytes) |
+| Expanded bytes per ZIP member | 16 MiB (16,777,216 bytes) |
+| Worksheets | 8 |
+| Worksheet row index | 10,000 |
+| Worksheet column index | 256 (IV) |
+| Aggregate coordinate-grid positions | 250,000 |
+| Aggregate explicitly represented worksheet cells | 100,000 |
+
+Admission checks file type and size before reading, rechecks the opened file and
+caps the actual read at the byte ceiling plus one rejection byte. One immutable
+snapshot supplies the hash, formula view, cached-value view and exact numeric
+source extraction. Neither openpyxl load begins before the complete preflight.
+
+The general workbook ceiling differs from the **128-column model-inference
+metadata ceiling** (`MAX_INFERENCE_COLUMNS`). Complete deterministic mappings can
+import wider tables, including 144-column tables, in either inference mode without
+constructing a provider. If an actual inference request is needed, a wider request
+fails before provider construction or transmission; columns are never truncated
+or omitted to fit the request limit. The existing 256-character-per-heading and
+32,768-total-heading-character request bounds also remain in force.
+
+ZIP central records are counted before the member list is materialized. Declared
+sizes are checked, then actual decompression is counted in bounded output chunks
+independently of ZIP's declared output lengths. Malformed, conflicting/duplicate
+member names, encrypted/unsupported members, corrupt payloads and XML entity/DTD
+declarations are rejected. Supported archives use single-disk ZIP with stored or deflated members. ZIP64
+metadata does not exempt an otherwise valid archive from any size or count ceiling.
+
+Worksheet XML inspection streams and clears elements. It checks declared dimensions,
+actual row/cell coordinates (including implicit coordinates), merge extents and
+column spans before eager parsing or rectangular iteration. Every worksheet part,
+including hidden, unselected and distractor sheets, contributes to the budgets.
+Each grid area uses maximum row index times maximum column index, measured from
+position 1, and the areas are summed across sheets. The explicit-cell ceiling
+counts XML cell records; it does not count placeholders openpyxl later creates
+inside an admitted grid. Misleading dimensions cannot hide sparse far-away cells.
+
+`numeric_values` independently enforces the same admission policy for direct callers
+and streams numeric XML values without building a complete worksheet tree.
+Discovery and inference also check loaded worksheet extents before iteration.
+Admission failures use workbook/structure errors before inference or database
+publication; `--replace` cannot destroy an existing database on admission failure.
+These ceilings bound supported inputs and parsing work. They do not provide
+comprehensive protection against every resource-exhaustion attack.
+
 ## Question interpretation and execution
 
 `qa.service` discovers the schema briefly, closes that connection, and asks the

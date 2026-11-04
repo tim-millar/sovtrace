@@ -1,1 +1,1 @@
-"""Fixed synthetic synthetic evaluation; never invoked by the application."""
+"""Fixed synthetic evaluation; never invoked by the application."""

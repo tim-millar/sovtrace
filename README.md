@@ -40,6 +40,11 @@ uv run --locked sovtrace ingest examples/synthetic-sov.xlsx --db data/generated/
 uv run --locked sovtrace ingest examples/synthetic-sov.xlsx --db data/generated/sov.sqlite --replace --format json --no-infer-schema
 ```
 
+Workbook admission has fixed byte, ZIP-expansion, sheet, coordinate and cell budgets;
+see the [exact resource ceilings and enforcement](docs/ARCHITECTURE.md#workbook-admission-budgets).
+Over-limit inputs fail before inference or publication, including when replacing
+an existing database. These limits are not a comprehensive resource-exhaustion guarantee.
+
 Import refuses to overwrite an existing database without `--replace`. It reads an
 immutable workbook snapshot, validates the supported table structure and records
 original worksheet/row/column coordinates. Exact duplicates are consolidated into

@@ -7,6 +7,7 @@ from openpyxl.cell.cell import Cell
 from openpyxl.workbook import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
+from . import resources
 from .errors import FailureCategory, IngestionError
 from .manifest import Diagnostic, SourceColumn
 
@@ -89,6 +90,7 @@ def _validate_merges(sheet: Worksheet, header: int) -> None:
 
 
 def discover_header(workbook: Workbook, *, infer_schema: bool = False) -> Structure:
+    resources.check_loaded_workbook(workbook)
     candidates: list[tuple[Worksheet, int]] = []
     for sheet in workbook.worksheets:
         assert isinstance(sheet, Worksheet)
@@ -125,7 +127,7 @@ def discover_header(workbook: Workbook, *, infer_schema: bool = False) -> Struct
                 _validate_merges(sheet, row_number)
                 if any(preamble_kind(sheet, r) is None for r in range(1, row_number)):
                     continue
-                if width > 128:
+                if width > resources.MAX_INFERENCE_COLUMNS:
                     raise IngestionError(
                         FailureCategory.STRUCTURE, "Unsupported inference column span"
                     )
@@ -201,6 +203,7 @@ def finalize_rows(
     *,
     inferred: bool = False,
 ) -> Structure:
+    resources.check_loaded_workbook(workbook)
     sheet = workbook[structure.worksheet]
     header, columns = structure.header_row, structure.columns
     width = len(columns)

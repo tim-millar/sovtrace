@@ -14,12 +14,76 @@ from .execution import execute_query, load_context, read_snapshot
 from .provider import Generation, OpenAIGenerator, SQLGenerator, schema_context
 from .validation import validate_sql
 
-# Explicit currency amounts only. This checks scale/strictness, not general NL intent.
+# Every currency introducer must produce one complete, unambiguous token.
+# This checks explicit amounts/inequalities, not general natural-language intent.
+CURRENCY = re.compile(r"\$|(?<!\w)USD", re.IGNORECASE)
 MONEY = re.compile(
-    r"(?P<operator>more than|greater than|over|exceed(?:s|ing)?|at least|less than|under|below|at most)?\s*"
-    r"(?P<sign>-)?(?:\$|USD\s*)(?P<amount>-?\d[\d,]*(?:\.\d+)?)\s*(?P<scale>million|billion|thousand|[mbk])?\b",
+    r"(?P<sign>-)?(?:\$|USD)\s*"
+    r"(?P<amount>-?(?:[0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:\.[0-9]+)?)"
+    r"(?:\s*(?P<scale>million|billion|thousand|[mbk])(?![A-Za-z0-9_]))?",
     re.IGNORECASE,
 )
+THRESHOLD_OPERATOR = re.compile(
+    r"\b(more\s+than|greater\s+than|over|exceed(?:s|ing)?|at\s+least|less\s+than|under|below|at\s+most)\s*$",
+    re.IGNORECASE,
+)
+
+
+def currency_tokens(question: str):
+    """Do not let malformed currency disappear through a partial regex match."""
+    for introducer in CURRENCY.finditer(question):
+        start = introducer.start()
+        if start and question[start - 1] == "-":
+            start -= 1
+        before = question[:start]
+        if before and not (before[-1].isspace() or before[-1] in "(\"'"):
+            raise QAError(
+                "unsupported_question", "threshold_syntax", "Malformed explicit currency threshold"
+            )
+        if before.rstrip().endswith(("-", "+")):
+            raise QAError(
+                "unsupported_question", "threshold_syntax", "Malformed explicit currency threshold"
+            )
+        match = MONEY.match(question, start)
+        if match is None:
+            raise QAError(
+                "unsupported_question", "threshold_syntax", "Malformed explicit currency threshold"
+            )
+        end = match.end()
+        # A period/comma could be a broken decimal/grouping separator. Adjoining
+        # letters, digits, signs, ratios and other suffixes cannot be discarded.
+        if end < len(question) and not (question[end].isspace() or question[end] in "?!);\"'"):
+            raise QAError(
+                "unsupported_question", "threshold_syntax", "Malformed explicit currency threshold"
+            )
+        if (
+            end < len(question)
+            and question[end] in "\"'"
+            and end + 1 < len(question)
+            and question[end + 1].isalnum()
+        ):
+            raise QAError(
+                "unsupported_question", "threshold_syntax", "Malformed explicit currency threshold"
+            )
+        following = question[end:].lstrip()
+        if following and following[0] in "0123456789.,+-":
+            raise QAError(
+                "unsupported_question",
+                "threshold_syntax",
+                "Ambiguous currency threshold continuation",
+            )
+        if re.match(
+            r"(?:thousand|million|billion|trillion|quadrillion)(?:\b|[A-Za-z0-9_])",
+            following,
+            re.IGNORECASE,
+        ):
+            raise QAError(
+                "unsupported_question", "threshold_syntax", "Ambiguous currency threshold scale"
+            )
+        operator = THRESHOLD_OPERATOR.search(before)
+        yield match, " ".join(operator[1].lower().split()) if operator else None
+
+
 MISSING = re.compile(
     r"\b(missing|unknown|unrecorded|null|not recorded|not provided|unavailable|blank)\b",
     re.IGNORECASE,
@@ -42,7 +106,7 @@ def check_thresholds(question: str, plan: ValidatedQuery) -> None:
         "below": exp.LT,
         "at most": exp.LTE,
     }
-    for match in MONEY.finditer(question):
+    for match, operator in currency_tokens(question):
         scale = (match["scale"] or "").lower()
         multiplier = {
             "": 1,
@@ -70,8 +134,8 @@ def check_thresholds(question: str, plan: ValidatedQuery) -> None:
             )
         integer = int(amount)
         amounts.add(integer)
-        if match["operator"]:
-            required_operators[integer] = operators[match["operator"].lower()]
+        if operator:
+            required_operators[integer] = operators[operator]
     if not amounts:
         return
     observed: set[int] = set()

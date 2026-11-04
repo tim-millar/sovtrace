@@ -23,6 +23,7 @@ from .manifest import FIELD_DEFINITIONS, Diagnostic, SchemaManifest, SemanticFie
 from .normalize import normalize
 from .numeric_source import numeric_values
 from .persistence import make_report, publish
+from .resources import inspect_workbook, read_snapshot
 
 __all__ = ["IngestionError", "ingest_workbook"]
 
@@ -50,10 +51,9 @@ def ingest_workbook(
     formulas: Workbook | None = None
     cached: Workbook | None = None
     try:
-        if source.suffix.lower() != ".xlsx":
-            raise IngestionError(FailureCategory.WORKBOOK, "Only .xlsx workbooks are supported")
         # Both modes and the content hash refer to exactly the same immutable byte snapshot.
-        content = source.read_bytes()
+        content = read_snapshot(source)
+        inspect_workbook(content)
         sha256 = hashlib.sha256(content).hexdigest()
         formulas = load_workbook(BytesIO(content), data_only=False)
         cached = load_workbook(BytesIO(content), data_only=True)

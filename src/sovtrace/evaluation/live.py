@@ -134,12 +134,9 @@ def measurements(cases: list[dict], ledger: Ledger, cost_estimator) -> dict:
     operations = ledger.operations
     calls = [o for o in operations if o["actual_call"]]
     for operation in operations:
-        # Preserve requested/observed model checks before an injected estimator.
-        # A configured schedule must also verify its exact model/tier and usage.
-        requested, actual = operation["requested_model"], operation["actual_model"]
-        compatible = actual and (actual == requested or actual.startswith(requested + "-"))
+        # The estimator owns explicit model/alias/tier compatibility checks.
         try:
-            cost = cost_estimator(operation) if compatible else None
+            cost = cost_estimator(operation)
         except (ValueError, KeyError, TypeError):
             cost = None
         operation["estimated_usd"] = str(cost) if cost is not None else None

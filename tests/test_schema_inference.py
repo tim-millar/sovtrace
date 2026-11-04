@@ -506,7 +506,7 @@ def test_bounded_private_type_profiles(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("header", [1, 5])
 @pytest.mark.parametrize("permuted", [False, True])
-def test_a4_business_results_and_complete_original_coordinates(
+def test_synthetic_business_results_and_complete_original_coordinates(
     tmp_path: Path, header: int, permuted: bool
 ) -> None:
     root = Path(__file__).parents[1]

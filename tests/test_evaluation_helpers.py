@@ -193,6 +193,43 @@ def test_unconfigured_rates_impossible_accounting_and_total_propagation(rates, o
     assert report["cost"]["sql_generation_usd"] is None
     operation["usage"]["cache_write_tokens"] = 900
     assert estimated_cost(operation, pricing=rates) is None
+
     operation["usage"]["cache_write_tokens"] = 100
     operation["usage"]["reasoning_tokens"] = 301
     assert estimated_cost(operation, pricing=rates) is None
+
+
+@pytest.mark.parametrize(
+    "change,expected",
+    [
+        ({}, True),
+        ({"actual_model": "independent-artificial-alias"}, True),
+        ({"actual_model": "unconfigured-alias"}, False),
+        ({"actual_model": "artificial-test-model-misleading-prefix"}, False),
+        ({"requested_model": "other-request"}, False),
+        ({"service_tier": "unknown-tier"}, False),
+    ],
+)
+def test_measurements_defers_alias_compatibility_to_explicit_schedule(
+    rates, operation, change, expected
+):
+    from dataclasses import replace
+
+    rates = replace(rates, observed_models=("independent-artificial-alias",))
+    operation.update(change)
+    ledger = Ledger()
+    ledger.operations = [operation]
+    result = measurements([], ledger, partial(estimated_cost, pricing=rates))
+    assert (result["cost"]["status"] == "available") is expected
+    if expected:
+        # Explicitly artificial rates: ordinary/cache-read/cache-write/output once.
+        cost = (
+            Decimal(700) * Decimal("1.7")
+            + Decimal(200) * Decimal("0.2")
+            + Decimal(100) * Decimal("3.3")
+            + Decimal(300) * Decimal("8.1")
+        ) / Decimal(1_000_000)
+        assert Decimal(result["cost"]["overall_usd"]) == cost
+    else:
+        assert result["cost"]["overall_usd"] is None
+    assert measurements([], ledger, estimated_cost)["cost"]["overall_usd"] is None

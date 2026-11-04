@@ -6,6 +6,7 @@ from typing import Annotated, Literal, Protocol, Self
 from openpyxl.worksheet.worksheet import Worksheet
 from pydantic import Field, model_validator
 
+from . import resources
 from .discovery import Structure, populated
 from .errors import FailureCategory, IngestionError
 from .manifest import (
@@ -91,9 +92,10 @@ def mapping_error(prefix: str, field: SemanticField | None = None) -> IngestionE
 
 
 def make_request(sheet: Worksheet, structure: Structure) -> InferenceRequest:
+    resources.check_sheet_bounds(sheet)
     columns = structure.columns
     if (
-        len(columns) > 128
+        len(columns) > resources.MAX_INFERENCE_COLUMNS
         or any(len(c.label or "") > 256 for c in columns)
         or sum(len(c.label or "") for c in columns) > 32768
     ):
