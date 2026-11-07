@@ -14,7 +14,9 @@ can cause a question to fail rather than produce a speculative answer.
 
 ## Install and try the offline demonstration
 
-Use Python 3.12 and uv:
+Prerequisites are Python 3.12, [uv](https://docs.astral.sh/uv/getting-started/installation/),
+and a local checkout of this repository. From the checkout, install the committed
+dependency versions and run the first experience:
 
 ```sh
 uv sync --locked
@@ -25,6 +27,11 @@ uv run --locked python scripts/demo.py --format json
 uv run --locked python scripts/verify_synthetic.py --offline
 ```
 
+Dependency installation may need ordinary package-network access. The recommended
+first experience is the text demonstration: it needs no OpenAI account, API
+credentials or live model requests. The evaluator is a separate, more extensive
+verification facility, not a measurement of live-model accuracy.
+
 The demonstration imports [the synthetic workbook](examples/synthetic-sov.xlsx)
 and runs eight fixed questions with predefined SQL, without credentials or model
 requests. SQL execution, numerical arithmetic and source-evidence reconciliation
@@ -32,6 +39,63 @@ are real. Text summarizes evaluated answers; JSON lines retain the executed SQL
 and complete demonstrated source-cell coordinates. Passing the offline suite does
 not measure live model accuracy. The evaluator uses 14 artificial fixtures and 80
 question outcomes, including deliberate refusals and ingestion rejections.
+
+### Worked example: Arizona TIV
+
+Run the text demonstration with:
+
+```sh
+uv run --locked python scripts/demo.py
+```
+
+The third case prints this excerpt from the actual run:
+
+```text
+3. What is the aggregate TIV of Arizona assets?
+   Answer: $20,000,000.00 | PASS
+```
+
+To inspect the structured records, including executed SQL and source coordinates,
+run:
+
+```sh
+uv run --locked python scripts/demo.py --format json
+```
+
+This excerpt from the third JSON line uses the demonstration's actual field names
+and values. The object and selected `source_cells` are excerpts; the displayed
+coordinates are not a complete coordinate list:
+
+```json
+{
+  "question": "What is the aggregate TIV of Arizona assets?",
+  "operation": "sum",
+  "executed_sql": "SELECT SUM(total_insurable_value_micro_usd) FROM assets WHERE state = 'AZ'",
+  "answer_value": 20000000000000,
+  "logical_contributing_assets": 2,
+  "physical_source_records": 3,
+  "evidence_reconciled": true,
+  "source_workbook": "synthetic-sov.xlsx",
+  "worksheet": "Statement of Values",
+  "source_cells": ["D2", "E2", "D4", "E4"]
+}
+```
+
+The displayed amount is USD; the structured integer is the exact sum in micro-USD
+(one-millionth of a dollar). Two logical Arizona assets draw on three physical
+worksheet records because the verified duplicate remains represented in source
+evidence. The worksheet name and coordinates identify cells in the committed
+synthetic workbook. The listed `D2`, `E2`, `D4` and `E4` are contributing
+coordinates, not an exhaustive list. Reconciliation checks that the executed
+interpretation agrees with retained source evidence within one database snapshot.
+It does not establish that arbitrary model-generated SQL captured a user's
+natural-language intent correctly.
+
+The demonstration's SQL comes from a predefined simulated generator; it does not
+perform live LLM interpretation. Workbook ingestion, SQL validation, SQLite
+execution, monetary calculation and evidence reconciliation are real application
+operations. An offline `PASS` therefore verifies this fixed case and its evidence,
+not live-model accuracy.
 
 ## Import and ask
 
@@ -51,8 +115,10 @@ original worksheet/row/column coordinates. Exact duplicates are consolidated int
 logical assets while retaining every physical source record; conflicting duplicates
 fail. Counts and listings refer to logical assets, not spreadsheet rows.
 
-Model-backed questions require an authorized OpenAI account and credentials exported
-in the shell. The application does not automatically load `.env` files:
+Live question interpretation requires authorized credentials and model access, sends
+the user's question verbatim with relevant semantic schema, and may incur provider
+charges. Do not use sensitive inputs without appropriate authorization. The
+application does not automatically load `.env` files:
 
 ```sh
 export OPENAI_API_KEY='<your-api-key>'
