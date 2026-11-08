@@ -1,0 +1,62 @@
+name: Security verification
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  secrets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install and verify Gitleaks 8.30.1
+        shell: bash
+        run: |
+          set -euo pipefail
+          install_dir="$RUNNER_TEMP/gitleaks"
+          mkdir -p "$install_dir"
+          curl --fail --location --silent --show-error \
+            https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz \
+            --output "$install_dir/gitleaks.tar.gz"
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  $install_dir/gitleaks.tar.gz" | sha256sum --check --strict
+          tar -xzf "$install_dir/gitleaks.tar.gz" -C "$install_dir" gitleaks
+          test "$("$install_dir/gitleaks" version)" = '8.30.1'
+      - name: Scan all fetched Git history (fully redacted)
+        run: python .ci/scan_secrets.py --gitleaks "$RUNNER_TEMP/gitleaks/gitleaks" .
+      - name: Verify scanner failure controls in disposable repositories
+        env:
+          GITLEAKS_BINARY: ${{ runner.temp }}/gitleaks/gitleaks
+        run: python -m unittest discover -s tests -p test_secret_scan.py -v
+  dependencies:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: '0.12.7'
+          enable-cache: false
+      - name: Install isolated hash-pinned audit tooling
+        run: |
+          uv venv --python 3.12 "$RUNNER_TEMP/audit-tools"
+          uv pip install --python "$RUNNER_TEMP/audit-tools/bin/python" \
+            --require-hashes -r .ci/audit-tooling-requirements.txt
+      - name: Verify the integrated auditor against failure fixtures
+        run: '"$RUNNER_TEMP/audit-tools/bin/python" -m unittest discover -s tests -p test_dependency_audit.py -v'
+      - name: Audit locked runtime and development dependencies
+        run: |
+          "$RUNNER_TEMP/audit-tools/bin/python" .ci/audit_dependencies.py
+          git diff --exit-code -- pyproject.toml uv.lock
