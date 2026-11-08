@@ -31,10 +31,53 @@ AUDIT_PYTHON = os.environ.get("SOVTRACE_AUDIT_PYTHON") or (
 FUNCTIONS = runpy.run_path(str(ENTRYPOINT))
 
 
+VALID_TIMESTAMPS = [
+    None,
+    "2026-01-01T00:00:00Z",
+    *["2026-01-01T00:00:00." + "123456"[:digits] + "Z" for digits in range(1, 7)],
+    "2024-02-29T23:59:59Z",
+]
+INVALID_TIMESTAMPS = [
+    "20260101T000000Z",
+    "2026-W01-1T00:00:00Z",
+    "2026-001T00:00:00Z",
+    "2026-01-01T00:00:00+02:00",
+    "2026-01-01T00:00:00+00:00",
+    "2026-01-01 00:00:00Z",
+    "2026-01-01T00:00:00",
+    "2026-02-30T00:00:00Z",
+    "2025-02-29T00:00:00Z",
+    "2026-01-01T25:00:00Z",
+    "2026-01-01T00:60:00Z",
+    "2026-01-01T00:00:60Z",
+    "2026-01-01T00:00:00.1234567Z",
+    "2026-01-01T00:00:00.Z",
+    "2026-01-01t00:00:00Z",
+    "2026-01-01T00:00:00z",
+    "2026-01-01T00:00:00UTC",
+    "2026-01-01T00:00:00+0000",
+    "2026-01-01T00:00:00Z\n",
+    "0000-01-01T00:00:00Z",
+    "026-01-01T00:00:00Z",
+    "02026-01-01T00:00:00Z",
+    "2026-1-01T00:00:00Z",
+    "2026-01-1T00:00:00Z",
+    "2026-01-01T0:00:00Z",
+    "2026-01-01T00:0:00Z",
+    "2026-01-01T00:00:0Z",
+    "2026-01-01T００:00:00Z",
+    "",
+    True,
+    12,
+    {},
+]
+
+
 class LocalPyPI(ThreadingHTTPServer):
     mode = "clean"
     events: list[tuple[str, ...]]
     project: Path
+    advisory_timestamps: dict
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -52,13 +95,14 @@ class Handler(BaseHTTPRequestHandler):
         if kind == "pypi":
             data = {"info": {"name": name, "version": version}, "vulnerabilities": []}
             media = "application/json"
-            if server.mode == "vulnerable" and name == "openai":
+            if server.mode in {"vulnerable", "timestamp-advisory"} and name == "openai":
                 data["vulnerabilities"] = [
                     {
                         "id": "SOVTRACE-CONTROL-0001",
                         "aliases": [],
                         "fixed_in": [],
                         "summary": "Synthetic control only",
+                        **server.advisory_timestamps,
                     }
                 ]
             if mode == "empty-object":
@@ -142,9 +186,14 @@ class BasicControls(unittest.TestCase):
         with self.assertRaises(FUNCTIONS["AuditError"]):
             json.loads('{"key": 1, "key": 2}', object_pairs_hook=FUNCTIONS["unique_object"])
 
+    def test_valid_utc_timestamps(self):
+        for value in VALID_TIMESTAMPS:
+            with self.subTest(value=value):
+                self.assertIsNone(FUNCTIONS["timestamp"](value))
+
     def test_invalid_timestamp_cannot_withdraw_an_advisory(self):
-        for value in [True, 12, "invalid", "2026-01-01"]:
-            with self.subTest(value=value), self.assertRaises(Exception):
+        for value in INVALID_TIMESTAMPS:
+            with self.subTest(value=value), self.assertRaises(FUNCTIONS["AuditError"]):
                 FUNCTIONS["timestamp"](value)
 
 
@@ -163,6 +212,7 @@ class IntegratedAuditControls(unittest.TestCase):
         self.server = LocalPyPI(("127.0.0.1", 0), Handler)
         self.server.events = []
         self.server.project = self.project
+        self.server.advisory_timestamps = {}
         thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         thread.start()
         self.addCleanup(self.server.server_close)
@@ -230,6 +280,60 @@ class IntegratedAuditControls(unittest.TestCase):
             {"name": "openai", "version": "2.54.0", "id": "SOVTRACE-CONTROL-0001", "aliases": []},
             report["vulnerabilities"],
         )
+
+    def test_valid_published_timestamps_match_native_parser_and_preserve_findings(self):
+        for value in VALID_TIMESTAMPS:
+            with self.subTest(published=value):
+                self.server.advisory_timestamps = {"published": value, "withdrawn": None}
+                result = self.run_audit("timestamp-advisory")
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                report = json.loads(result.stdout)
+                self.assertEqual(report["status"], "blocked")
+                self.assertEqual(
+                    report["vulnerabilities"],
+                    [
+                        {
+                            "name": "openai",
+                            "version": "2.54.0",
+                            "id": "SOVTRACE-CONTROL-0001",
+                            "aliases": [],
+                        }
+                    ],
+                )
+
+    def test_valid_withdrawals_follow_pinned_policy(self):
+        for value in VALID_TIMESTAMPS:
+            if value is None:
+                continue  # Null withdrawal remains an active finding, tested above.
+            with self.subTest(withdrawn=value):
+                self.server.advisory_timestamps = {
+                    "published": "2024-01-01T00:00:00Z",
+                    "withdrawn": value,
+                }
+                result = self.run_audit("timestamp-advisory")
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                report = json.loads(result.stdout)
+                self.assertEqual(report["status"], "passed")
+                self.assertEqual(report["vulnerabilities"], [])
+                self.assertIn(
+                    {"name": "openai", "version": "2.54.0"}, report["vulnerability_checks"]
+                )
+
+    def test_malformed_advisory_timestamps_fail_production_entrypoint(self):
+        for field in ["published", "withdrawn"]:
+            for value in INVALID_TIMESTAMPS:
+                with self.subTest(field=field, value=value):
+                    # A valid non-null withdrawal makes the native service skip
+                    # published parsing. The adapter must still reject invalid
+                    # published data before it can disappear with that advisory.
+                    self.server.advisory_timestamps = {
+                        "published": "2024-01-01T00:00:00Z",
+                        "withdrawn": "2026-01-01T00:00:00Z",
+                        field: value,
+                    }
+                    result = self.run_audit("timestamp-advisory")
+                    self.assert_failed(result)
+                    self.assertIn("invalid advisory timestamp", result.stderr)
 
     def test_incomplete_or_invalid_vulnerability_checks_fail_integrated_command(self):
         for mode in [

@@ -5,6 +5,7 @@ import hashlib
 import importlib.metadata
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -33,11 +34,20 @@ def unique_object(pairs):
 
 def timestamp(value):
     if value is not None:
-        require(isinstance(value, str), "invalid advisory timestamp")
         require(
-            datetime.fromisoformat(value.replace("Z", "+00:00")).tzinfo is not None,
-            "advisory timestamp has no timezone",
+            isinstance(value, str)
+            and re.fullmatch(
+                r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,6})?Z", value
+            ),
+            "invalid advisory timestamp syntax",
         )
+        # Match the pinned pip-audit parser's formats, after enforcing field widths
+        # and UTC syntax that strptime alone does not require.
+        fmt = "%Y-%m-%dT%H:%M:%S.%fZ" if "." in value else "%Y-%m-%dT%H:%M:%SZ"
+        try:
+            datetime.strptime(value, fmt)
+        except ValueError:
+            raise AuditError("invalid advisory timestamp date or time") from None
 
 
 def snapshot(root):
