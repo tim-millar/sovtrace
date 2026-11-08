@@ -48,7 +48,6 @@ From a full checkout, fetch all destination branches and tags and run:
 ```sh
 git fetch origin '+refs/heads/*:refs/remotes/origin/*' --tags
 python3 .ci/scan_secrets.py .
-uv audit --locked
 ```
 
 A shallow clone must first be unshallowed (`git fetch --unshallow origin`). To
@@ -79,15 +78,65 @@ simulated failure controls and skips real-scanner cases when no binary is suppli
 Use Gitleaks' default rules and keep full redaction enabled. Do not upload
 unredacted reports or secret-bearing artifacts.
 
-`uv audit --locked` checks the committed, current `uv.lock`, including direct and
-transitive runtime and development dependencies. It must not change dependency
-versions or rewrite the lockfile; check with
-`git diff --exit-code -- pyproject.toml uv.lock`. Do not narrow dependency groups,
-ignore advisories, or substitute `--frozen` for the current-lock requirement.
-Dependency installation and auditing require network access; the audit uses uv's
-default official OSV advisory service. Run it outside `UV_OFFLINE=1` and the Python
-offline guard. The offline demo and synthetic evaluator need no provider
-credentials or live model calls.
+Dependency verification uses **pip-audit 2.10.1**, its PyPI vulnerability service,
+and the same verification adapter locally and in CI. Install the independently
+hash-pinned tooling environment outside the application environment:
+
+```sh
+SOVTRACE_AUDIT_ENV="$(mktemp -d)/audit-tools"
+uv venv --python 3.12 "$SOVTRACE_AUDIT_ENV"
+uv pip install --python "$SOVTRACE_AUDIT_ENV/bin/python" \
+  --require-hashes -r .ci/audit-tooling-requirements.txt
+"$SOVTRACE_AUDIT_ENV/bin/python" .ci/audit_dependencies.py
+"$SOVTRACE_AUDIT_ENV/bin/python" -m unittest discover -s tests -p test_dependency_audit.py -v
+```
+
+[pip-audit 2.10.1](https://github.com/pypa/pip-audit/releases/tag/v2.10.1) is pinned
+along with all its tooling dependencies in `.ci/audit-tooling-requirements.txt`.
+To deliberately regenerate that tooling manifest with uv 0.12.7, use
+`printf '%s\n' 'pip-audit==2.10.1' | uv pip compile --python-version 3.12 --generate-hashes - -o .ci/audit-tooling-requirements.txt`,
+then review every change and rerun the integrated controls. This manifest does not
+replace the application's `uv.lock` or add application dependencies.
+
+The adapter requires Python 3.12 and uv 0.12.7. It runs `uv export --locked` for
+all groups and extras, including runtime, development and transitive dependencies,
+without resolving or installing another graph. Every exported name/version must
+match the committed registry inventory before environment markers are evaluated.
+The current lock has **30 registry dependencies plus the local project**; on
+Linux/Python 3.12, **29 registry dependencies** apply. `colorama==0.4.6` is excluded
+by its Windows marker. The local editable SOVTrace root is excluded from PyPI
+requests. Other non-PyPI sources and selection/configuration overrides fail.
+
+A standard Requests HTTP adapter validates the actual responses consumed by the
+pinned pip-audit PyPI service; pip-audit functions are not replaced. Missing or
+malformed vulnerability collections, wrong package/version identities, duplicate
+JSON keys, unsupported pagination, failed lookups and interrupted HTTP bodies
+fail. Successful request and interpretation ledgers must contain every selected
+name/version. A separate required PyPI Simple API 1.4 lookup checks each project's
+status: archived, deprecated, quarantined, unknown or unavailable status fails.
+Only a valid response can supply the specification's default active marker.
+Advisory IDs, versions and adverse statuses remain in the structured diagnostics.
+No persistent advisory cache can mask an unavailable service.
+
+The PyPI feed replaces the direct OSV audit service for this gate. Stock
+`uv audit --locked` and stock pip-audit final JSON cannot establish these completion
+guarantees and are not substitutes for the adapter. The adapter uses a small,
+version-pinned library surface and Requests' supported transport API; tool updates
+must retain the failure controls. No custom vulnerability matching, advisory
+suppression, proxy service or second dependency resolver is used.
+
+The unittest command above runs the production entrypoint in fresh subprocesses
+against local HTTP fixtures, including native parsing and truncated HTTP framing.
+Only the test transport redirects requests to localhost; production URLs and TLS
+verification remain fixed. Offline pytest runs the deterministic basic controls
+and skips these HTTP integration cases without the isolated audit environment.
+
+The audit must not change `pyproject.toml` or `uv.lock`; verify with
+`git diff --exit-code -- pyproject.toml uv.lock`. Missing/stale locks, incomplete
+ledgers, findings, input mutations and audit errors fail closed. Dependency
+installation and security auditing require network access; run the audit outside
+`UV_OFFLINE=1` and the Python offline guard. The offline demo and synthetic
+evaluator need no provider credentials or live model calls.
 
 The separate security workflow runs on every PR and push to `main`. Its `secrets`
 and `dependencies` jobs must both pass: findings, stale or absent locking,

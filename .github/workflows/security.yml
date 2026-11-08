@@ -49,8 +49,14 @@ jobs:
         with:
           version: '0.12.7'
           enable-cache: false
+      - name: Install isolated hash-pinned audit tooling
+        run: |
+          uv venv --python 3.12 "$RUNNER_TEMP/audit-tools"
+          uv pip install --python "$RUNNER_TEMP/audit-tools/bin/python" \
+            --require-hashes -r .ci/audit-tooling-requirements.txt
+      - name: Verify the integrated auditor against failure fixtures
+        run: '"$RUNNER_TEMP/audit-tools/bin/python" -m unittest discover -s tests -p test_dependency_audit.py -v'
       - name: Audit locked runtime and development dependencies
         run: |
-          uv --version
-          uv audit --locked
+          "$RUNNER_TEMP/audit-tools/bin/python" .ci/audit_dependencies.py
           git diff --exit-code -- pyproject.toml uv.lock
