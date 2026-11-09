@@ -97,6 +97,31 @@ execution, monetary calculation and evidence reconciliation are real application
 operations. An offline `PASS` therefore verifies this fixed case and its evidence,
 not live-model accuracy.
 
+## Engineering case study and terminal walkthrough
+
+Read the [engineering case study](docs/ENGINEERING_CASE_STUDY.md) for the architecture
+diagram, trust boundaries, provenance and engineering trade-offs. Run its five-step
+walkthrough with:
+
+```sh
+uv run --locked python scripts/case_study_demo.py
+```
+
+It uses only the committed synthetic workbook and a temporary database, with schema
+inference explicitly disabled and SQL generation supplied by a labelled deterministic
+test double. Ingestion, local SQL validation, SQLite execution and same-snapshot
+source-evidence reconciliation are real. The two refusal examples separately show
+a simulated model-declared unsupported request and deterministic local rejection of
+prohibited SQL. They demonstrate application behaviour, not live-model refusal quality.
+The walkthrough makes no live model requests and needs no credentials.
+
+For optional authenticated model interpretation, use the existing
+[`sovtrace ask` pathway](#import-and-ask) after importing a database. It sends the
+question and semantic schema to an external provider, requires authorized model
+access and may incur charges. Review [data exposure and retention limits](#what-leaves-the-machine)
+and obtain authorization for sensitive inputs first. This pathway is not run by the
+walkthrough, tests or offline CI and has not been evaluated by the offline results.
+
 ## Import and ask
 
 ```sh
@@ -180,7 +205,7 @@ uv run --locked pyright
 uv run --locked pytest -q
 ```
 
-CI runs these checks, CLI smoke checks, both demonstration formats and the offline
+CI runs these checks, CLI smoke checks, both original demonstration formats, the case-study walkthrough and the offline
 evaluator with credentials removed and a network guard. No provider-price schedule
 is shipped. Cost estimates are unavailable unless a caller explicitly injects a
 separately verified, sourced and dated model/tier-compatible schedule. Test rates
