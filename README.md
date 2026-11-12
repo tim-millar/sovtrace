@@ -211,3 +211,10 @@ is shipped. Cost estimates are unavailable unless a caller explicitly injects a
 separately verified, sourced and dated model/tier-compatible schedule. Test rates
 are artificial and are not provider prices. Dependencies are installed from the
 lockfile; their implementation and environments are not bundled in this repository.
+
+## Licence
+
+SOVTrace's owner-authored project materials are licensed under the MIT License; see
+[LICENSE](LICENSE). Third-party dependencies and other independently licensed materials remain
+subject to their own licence terms. Dependencies are installed separately and are not bundled
+with the project source.

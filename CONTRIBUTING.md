@@ -174,3 +174,9 @@ information in issues, pull requests, fixtures or other contributions.
 Report security vulnerabilities according to [SECURITY.md](SECURITY.md), rather
 than through ordinary public issues. Contributions are reviewed on a best-effort
 basis; no response-time commitment is offered.
+
+## Licensing contributions
+
+By submitting a contribution to SOVTrace, you confirm that you have the right to provide it and
+intend it to be licensed under the project's MIT License. Do not submit third-party material that
+you are not authorised to contribute under those terms.
