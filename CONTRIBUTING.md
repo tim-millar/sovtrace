@@ -160,12 +160,11 @@ No advisories are ignored by default. Any temporary exception requires explicit
 owner approval recording the package/version, advisory ID and aliases, runtime or
 development scope, actual applicability/exposure, fixed versions and remediation
 obstacle, mitigation, review date, and expiry or reassessment condition. Suppress
-only the individually approved advisory IDs. This issue authorises no exceptions,
-repository visibility changes, releases, tags or package distribution.
+only the individually approved advisory IDs.
 
 ## Issues, pull requests and support
 
-Once the repository is public, use GitHub issues for ordinary bug reports,
+Use GitHub issues for ordinary bug reports,
 questions and feature proposals. Propose code changes through GitHub pull requests.
 Include concise reproduction steps and applicable synthetic test coverage. Do not
 submit real customer workbooks, secrets, or restricted personal or business
