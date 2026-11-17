@@ -7,9 +7,9 @@ validation, and local SQLite execution with retained source evidence.
 
 The application has finite resource ceilings and fail-closed controls. These
 controls do not guarantee the absence of vulnerabilities or comprehensive
-protection against every resource-exhaustion technique. Version `0.1.0` is
-currently unreleased; this policy does not define a supported-release matrix or
-promise support for older versions.
+protection against every resource-exhaustion technique. This policy does not
+define a supported-release matrix or promise maintenance or security updates for
+any particular version.
 
 ## Reporting a vulnerability
 

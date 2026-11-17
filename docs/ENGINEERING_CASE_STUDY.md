@@ -339,4 +339,4 @@ additional explicitly specified domains or scalable complete evidence strategies
 Each would require its own contracts and reproducible evidence. These are
 considerations, not implemented features or commitments to the v0.1.0 roadmap.
 This milestone supplies case-study and demonstration readiness; public release
-remains a separate gate.
+follows a separate authorization gate.

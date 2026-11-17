@@ -1,8 +1,12 @@
 # SOVTrace
 
-SOVTrace imports a bounded insurance Schedule of Values (SOV) workbook into SQLite,
-answers supported questions through validated SQL, and reconciles each answer with
-its original spreadsheet cells. Version 0.1.0 is unreleased.
+SOVTrace is a local Python 3.12 CLI for supported insurance Schedule of Values
+(SOV) workbooks. It ingests workbooks into SQLite, executes bounded supported
+questions through independently validated, restricted SQL, calculates money with
+exact integer micro-USD arithmetic, and reconciles answers with original
+spreadsheet-cell evidence. See the
+[GitHub Releases page](https://github.com/tim-millar/sovtrace/releases) for
+versioned source releases.
 
 This is a local Python 3.12 application for supported insurance SOV tables. It is
 not an arbitrary-spreadsheet interpreter. Supported operations are existence,
