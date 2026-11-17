@@ -42,6 +42,17 @@ ROOT = Path(__file__).resolve().parents[1]
 matches_reference_sql = partial(matches_evaluation_sql, base_comparator=matches_base_sql)
 
 
+def git_provenance() -> tuple[bool | None, str | None]:
+    """Return checkout provenance, or unavailable values for an exported source tree."""
+    if not (ROOT / ".git").exists():
+        return None, None
+    dirty = bool(
+        subprocess.check_output(["git", "diff", "HEAD", "--name-only"], cwd=ROOT, text=True).strip()
+    )
+    sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+    return dirty, sha
+
+
 def run_offline() -> dict:
     with tempfile.TemporaryDirectory(prefix="sov-synthetic-offline-") as directory:
         cases = [
@@ -56,19 +67,14 @@ def run_offline() -> dict:
             )
             for f in FIXTURES
         ]
+    tracked_tree_dirty, git_sha = git_provenance()
     report = {
         "evaluator_version": "synthetic-report-v3",
         "fixture_oracle_version": VERSION,
-        "tracked_tree_dirty": bool(
-            subprocess.check_output(
-                ["git", "diff", "HEAD", "--name-only"], cwd=ROOT, text=True
-            ).strip()
-        ),
+        "tracked_tree_dirty": tracked_tree_dirty,
         "mode": "offline",
         "utc_timestamp": datetime.now(UTC).isoformat(),
-        "git_sha": subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
-        ).strip(),
+        "git_sha": git_sha,
         "credentials_available": "not_inspected",
         "providers_available": True,
         "configured_models": {"schema": "fake-schema", "sql": "fake-sql"},
@@ -242,20 +248,15 @@ def run_live(schema_provider=None, sql_provider=None, *, limit: int = 30) -> dic
                 )
                 finish(case)
             cases.append(case)
+    tracked_tree_dirty, git_sha = git_provenance()
     report = {
         "evaluator_version": "synthetic-report-v3",
         "fixture_oracle_version": VERSION,
-        "tracked_tree_dirty": bool(
-            subprocess.check_output(
-                ["git", "diff", "HEAD", "--name-only"], cwd=ROOT, text=True
-            ).strip()
-        ),
+        "tracked_tree_dirty": tracked_tree_dirty,
         "mode": "live",
         "provider_mode": "injected" if injected else "actual",
         "utc_timestamp": datetime.now(UTC).isoformat(),
-        "git_sha": subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
-        ).strip(),
+        "git_sha": git_sha,
         "credentials_available": credentials,
         "providers_available": "injected" if injected else "not_probed" if credentials else False,
         "configured_models": {"schema": schema_model, "sql": sql_model},

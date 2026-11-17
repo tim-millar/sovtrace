@@ -84,6 +84,17 @@ def test_complete_offline_suite_and_accounting(runner, monkeypatch):
             runner["validate_report"](wrong)
 
 
+def test_offline_evaluation_from_exported_tree_has_unavailable_git_provenance(
+    runner, monkeypatch, tmp_path
+):
+    namespace = runner["run_offline"].__globals__
+    monkeypatch.setitem(namespace, "ROOT", tmp_path)
+    report = runner["run_offline"]()
+    assert report["status"] == "passed"
+    assert report["tracked_tree_dirty"] is None
+    assert report["git_sha"] is None
+
+
 def test_corpus_is_byte_reproducible_and_e11_layout_is_exact(tmp_path):
     first, second = tmp_path / "first.xlsx", tmp_path / "second.xlsx"
     for fixture in FIXTURES:
