@@ -142,7 +142,11 @@ bundle _2.5.22_ exec ruby scripts/manage_adoption.rb apply "$out/baseline-plan.y
 
 For the adapter refusal, invoke `plan "$target" --operation adopt_adapters --framework-source "$ads" --scope . --adapter-selection "$out/python-selection.yml" --adapter-decisions "$out/adapter-unreviewed.yml" --effective-date 2026-11-22 --output "$out/adapter-refused-plan.yml"` with the same Bundler command prefix. The deliberate negative control has schema version 1, `selection_reviewed` false and empty `adapter_changes`, `commands`, `components` and `retained_files`. Use a distinct output for the mixed-flags control. The baseline stale control uses distinct decision and plan paths.
 
-Unknown bindings, manager conflicts, mixed scopes, collisions, source drift and revision changes were reviewed through implementation and pinned synthetic tests such as `test/adapters/python_test.rb` and `test/adoption/python_transaction_test.rb`. They were not induced in the pinned target. The successful baseline plan establishes mechanical preservation of native files for those inputs. It establishes no specialised content or v2 applicability for SOVTrace. V2 preflight additionally binds assessment inputs, reviewed bytes and Git identities, and rebuilds the approved projection. Exact-plan acceptance remains a separate authorisation.
+Unknown bindings, manager conflicts, mixed scopes, collisions, source drift and revision changes were reviewed through the pinned ADS implementation and synthetic tests, including `test/adapters/python_test.rb` and `test/adoption/python_transaction_test.rb`. These adverse conditions were not induced in the pinned SOVTrace target.
+
+The successful SOVTrace-specific baseline plan proposed metadata creation only, with no managed component-file writes. Its preview, check and dry-run established applicability at the captured clean target revision without modifying that target. They did not independently establish native-file preservation under the synthetic adverse conditions, specialised-content applicability, or v2 adapter-transaction applicability for SOVTrace.
+
+ADS's v2 preflight separately provides documented controls for assessment inputs, reviewed bytes, Git identities and approved-projection reconstruction. Their application to a reviewed SOVTrace adapter plan remains untested. Exact-plan acceptance remains a separate authorisation.
 
 ## Component inventory and proposed dispositions
 
